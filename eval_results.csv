@@ -1,21 +1,23 @@
 input,expected,got_tool,got_args,status,seconds
-What's my battery level?,['get_vehicle_status'],get_vehicle_status,{},PASS,0.51
-How far can I drive?,['get_vehicle_status'],get_vehicle_status,{},PASS,0.3
-Is the heater on?,['get_vehicle_status'],get_vehicle_status,{},PASS,0.32
-Are the windows open?,['get_vehicle_status'],get_vehicle_status,{},PASS,0.34
-Set the temperature to 21 degrees,['set_temperature'],set_temperature,{'temp_c': 21},PASS,0.51
-Make it 24 degrees in here,['set_temperature'],set_temperature,{'temp_c': 24},PASS,0.51
-I'm freezing,"['set_temperature', 'set_seat_heating']",set_temperature,{'temp_c': 22},PASS,0.51
-It's boiling in here,['set_temperature'],set_temperature,{'temp_c': 22},PASS,0.52
-I'm a bit chilly,"['set_temperature', 'set_seat_heating']",set_temperature,{'temp_c': 22},PASS,0.53
-Turn on the seat heating,['set_seat_heating'],set_seat_heating,{'level': 1},PASS,0.53
-Seat heating to medium,['set_seat_heating'],set_seat_heating,{'level': 2},PASS,0.52
-Make my seat really warm,['set_seat_heating'],set_seat_heating,{'level': 3},PASS,0.52
-Turn off the seat heating,['set_seat_heating'],set_seat_heating,{'level': 0},PASS,0.52
-Open the windows,['set_windows'],set_windows,{'open_windows': True},PASS,0.47
-Close the windows,['set_windows'],set_windows,{'open_windows': False},PASS,0.46
-Let some fresh air in,['set_windows'],set_windows,{'open_windows': True},PASS,0.47
-Set the temperature to 50 degrees,[None],,{},PASS,1.06
-Order me a pizza,[None],,{},PASS,0.63
-Play some music,[None],,{},PASS,0.75
-What's the capital of France?,[None],,{},PASS,0.6
+What's my battery level?,['get_vehicle_status'],get_vehicle_status,{},PASS,4.85
+How far can I drive?,['get_vehicle_status'],get_vehicle_status,{},PASS,0.31
+Is the heater on?,['get_vehicle_status'],get_vehicle_status,{},PASS,0.33
+Are the windows open?,['get_vehicle_status'],get_vehicle_status,{},PASS,0.3
+Set the temperature to 21 degrees,['set_temperature'],set_temperature,{'temp_c': 21},PASS,0.38
+Make it 24 degrees in here,['set_temperature'],set_temperature,{'temp_c': 24},PASS,0.39
+I'm freezing,['adjust_temperature'],adjust_temperature,{'change_c': 3},PASS,0.35
+It's boiling in here,['adjust_temperature'],adjust_temperature,{'change_c': -3},PASS,0.36
+I'm a bit chilly,['adjust_temperature'],adjust_temperature,{'change_c': 2},PASS,0.37
+Make it a bit cooler,['adjust_temperature'],adjust_temperature,{'change_c': -2},PASS,0.36
+Warmer please,['adjust_temperature'],adjust_temperature,{'change_c': 2},PASS,0.37
+Turn on the seat heating,['set_seat_heating'],set_seat_heating,{'level': 1},PASS,0.38
+Seat heating to medium,['set_seat_heating'],set_seat_heating,{'level': 2},PASS,0.38
+Make my seat really warm,['set_seat_heating'],set_seat_heating,{'level': 3},PASS,0.38
+Turn off the seat heating,['set_seat_heating'],set_seat_heating,{'level': 0},PASS,0.39
+Open the windows,['set_windows'],set_windows,{'open_windows': True},PASS,0.35
+Close the windows,['set_windows'],set_windows,{'open_windows': False},PASS,0.36
+Let some fresh air in,['set_windows'],set_windows,{'open_windows': True},PASS,0.35
+Set the temperature to 50 degrees,[None],,{},PASS,0.26
+Order me a pizza,[None],,{},PASS,0.37
+Play some music,[None],,{},PASS,0.52
+What's the capital of France?,[None],,{},PASS,0.33

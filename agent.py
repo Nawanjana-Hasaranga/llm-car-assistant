@@ -1,11 +1,12 @@
 import ollama
-from vehicle import car, get_vehicle_status, set_temperature, set_seat_heating, set_windows
+from vehicle import car, get_vehicle_status, set_temperature, adjust_temperature, set_seat_heating, set_windows
 
 MODEL = "qwen2.5:7b"
 
 SYSTEM_PROMPT = (
     "You are an in-car voice assistant. Use tools to read or control the car. "
-    "Never guess vehicle data: use get_vehicle_status to check it. "
+    "For ANY question about the car's current state (heater, temperature, seat heating, windows, battery, range, speed), "
+    "always call get_vehicle_status first. Never answer from memory. "
     "Never say you changed something unless you called a tool and it returned ok: True. "
     "If a request is not possible, say so and do not pretend to act. "
     "Answer in 1-2 short sentences."
@@ -26,13 +27,27 @@ tools = [
         "type": "function",
         "function": {
             "name": "set_temperature",
-            "description": "Set the cabin target temperature in Celsius and turn on the heater.",
+            "description": "Set the cabin target temperature to an exact value in Celsius. Use ONLY when the driver says a specific number.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "temp_c": {"type": "integer", "description": "Target temperature in Celsius, between 16 and 30"}
                 },
                 "required": ["temp_c"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "adjust_temperature",
+            "description": "Make the cabin warmer or cooler relative to the current target temperature. Use this when the driver describes a feeling (cold, freezing, chilly, hot, boiling, warm) or says warmer/cooler, without a specific number.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "change_c": {"type": "integer", "description": "Degrees to change. Positive = warmer (e.g. 2), negative = cooler (e.g. -2). Use about 3 for strong feelings like freezing or boiling, 1-2 for mild ones."}
+                },
+                "required": ["change_c"],
             },
         },
     },
@@ -70,6 +85,7 @@ tools = [
 functions = {
     "get_vehicle_status": get_vehicle_status,
     "set_temperature": set_temperature,
+    "adjust_temperature": adjust_temperature,
     "set_seat_heating": set_seat_heating,
     "set_windows": set_windows,
 }

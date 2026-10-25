@@ -5,7 +5,8 @@ from agent import MODEL, SYSTEM_PROMPT, tools
 
 # ---------- The test set: sentence + correct tool ----------
 # "expected" = list of acceptable tools. None = no tool should be called.
-# "args" (optional) = values the tool must receive.
+# "args" (optional) = exact values the tool must receive.
+# "check" (optional) = a rule the values must follow (e.g. warmer than 20).
 test_cases = [
     # Reading status
     {"input": "What's my battery level?", "expected": ["get_vehicle_status"]},
@@ -13,12 +14,16 @@ test_cases = [
     {"input": "Is the heater on?", "expected": ["get_vehicle_status"]},
     {"input": "Are the windows open?", "expected": ["get_vehicle_status"]},
 
-    # Temperature
+    # Temperature: exact numbers -> set_temperature
     {"input": "Set the temperature to 21 degrees", "expected": ["set_temperature"], "args": {"temp_c": 21}},
     {"input": "Make it 24 degrees in here", "expected": ["set_temperature"], "args": {"temp_c": 24}},
-    {"input": "I'm freezing", "expected": ["set_temperature", "set_seat_heating"]},
-    {"input": "It's boiling in here", "expected": ["set_temperature"]},
-    {"input": "I'm a bit chilly", "expected": ["set_temperature", "set_seat_heating"]},
+
+    # Temperature: feelings -> adjust_temperature (warmer > 0, cooler < 0)
+    {"input": "I'm freezing", "expected": ["adjust_temperature"], "check": lambda a: a.get("change_c", 0) > 0},
+    {"input": "It's boiling in here", "expected": ["adjust_temperature"], "check": lambda a: a.get("change_c", 0) < 0},
+    {"input": "I'm a bit chilly", "expected": ["adjust_temperature"], "check": lambda a: a.get("change_c", 0) > 0},
+    {"input": "Make it a bit cooler", "expected": ["adjust_temperature"], "check": lambda a: a.get("change_c", 0) < 0},
+    {"input": "Warmer please", "expected": ["adjust_temperature"], "check": lambda a: a.get("change_c", 0) > 0},
 
     # Seat heating
     {"input": "Turn on the seat heating", "expected": ["set_seat_heating"]},
@@ -65,11 +70,19 @@ for i, case in enumerate(test_cases, start=1):
     seconds = time.time() - start
     total_time += seconds
 
+    # 1. Right tool?
     correct = tool in case["expected"]
+
+    # 2. Exact values correct?
     if correct and "args" in case:
         for key, value in case["args"].items():
             if args.get(key) != value:
                 correct = False
+
+    # 3. Do the values make sense? (new)
+    if correct and "check" in case:
+        if not case["check"](args):
+            correct = False
 
     if correct:
         passed += 1

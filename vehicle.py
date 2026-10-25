@@ -24,6 +24,15 @@ def set_temperature(temp_c):
     return {"ok": True, "target_temp_c": temp_c}
 
 
+def adjust_temperature(change_c):
+    old_temp = car["target_temp_c"]
+    new_temp = old_temp + change_c
+    new_temp = max(16, min(30, new_temp))  # safety: keep between 16 and 30
+    car["target_temp_c"] = new_temp
+    car["heater_on"] = True
+    return {"ok": True, "old_target_temp_c": old_temp, "new_target_temp_c": new_temp}
+
+
 def set_seat_heating(level):
     if level not in [0, 1, 2, 3]:
         return {"ok": False, "error": "Seat heating level must be 0, 1, 2 or 3"}
