@@ -18,7 +18,7 @@ tools = [
         "type": "function",
         "function": {
             "name": "get_vehicle_status",
-            "description": "Get the car's current status: battery %, range, temperatures, heater, seat heating, windows, speed.",
+            "description": "Get the car's current status: battery %, range (how far the car can still drive in km), cabin and target temperature, heater, seat heating, windows, speed. Use this whenever the driver asks about the car's condition.",
             "parameters": {"type": "object", "properties": {}},
         },
     },
@@ -108,12 +108,13 @@ def ask_assistant(user_text, messages):
 
 
 # ---------- 4. The chat ----------
-messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-print("Car assistant ready. Type 'quit' to exit.")
+if __name__ == "__main__":
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    print("Car assistant ready. Type 'quit' to exit.")
 
-while True:
-    user_text = input("\nYou: ")
-    if user_text.lower() == "quit":
-        break
-    answer = ask_assistant(user_text, messages)
-    print("Car:", answer)
+    while True:
+        user_text = input("\nYou: ")
+        if user_text.lower() == "quit":
+            break
+        answer = ask_assistant(user_text, messages)
+        print("Car:", answer)
