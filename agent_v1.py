@@ -10,7 +10,7 @@ tools = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "temp_c": {"type": "integer", "description": "Target temperature in Celsius, between 16 and 30"}
+                    "temp_c": {"type": "integer", "description": "Target temperature in Celsius, between 16 and 30"},
                 },
                 "required": ["temp_c"],
             },
@@ -20,7 +20,7 @@ tools = [
 
 messages = [
     {"role": "system", "content": "You are an in-car voice assistant. Use tools to control the car. Answer in 1-2 short sentences."},
-    {"role": "user", "content": "I'm freezing"},
+    {"role": "user", "content": "What's my battery level?"},
 ]
 
 print("Car BEFORE:", car)
@@ -28,6 +28,7 @@ print("Car BEFORE:", car)
 # STEP A: LLM decides
 response = ollama.chat(model="qwen2.5:7b", messages=messages, tools=tools, options={"temperature": 0})
 messages.append(response.message)
+print("First answer:", response.message.content)
 
 # STEP B: Our code runs the tool the LLM asked for
 for call in response.message.tool_calls or []:
