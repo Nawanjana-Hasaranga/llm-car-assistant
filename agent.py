@@ -1,3 +1,4 @@
+import re
 import ollama
 from vehicle import car, get_vehicle_status, set_temperature, adjust_temperature, set_seat_heating, set_windows
 
@@ -9,8 +10,23 @@ SYSTEM_PROMPT = (
     "always call get_vehicle_status first. Never answer from memory. "
     "Never say you changed something unless you called a tool and it returned ok: True. "
     "If a request is not possible, say so and do not pretend to act. "
+    "When a request is not possible, offer ONE specific alternative with an exact value "
+    "(for example: 'Would you like 30 degrees instead?'). "
+    "If the driver says yes, only do exactly the action you proposed. "
+    "Never invent a value the driver did not say or confirm. "
     "Answer in 1-2 short sentences."
 )
+
+# Patterns that mean "I am doing / did an action" (built from real failures)
+CLAIM_PATTERNS = [
+    r"\bi(?:'ve| have|'ll| will|'m| am)?\s+(?:now\s+|just\s+|already\s+)?(?:set|setting|increas\w*|decreas\w*|lower\w*|rais\w*|turn\w*|open\w*|clos\w*|adjust\w*|activat\w*|switch\w*|chang\w*|reduc\w*|boost\w*|made|making)\b",
+    r"^\s*(?:setting|increasing|decreasing|lowering|raising|turning|opening|closing|adjusting|switching|changing|reducing)\b",
+    r"\b(?:has|have) been (?:set|increased|decreased|lowered|raised|turned|opened|closed|adjusted|changed|reduced|activated|switched)\b",
+    r"\b(?:is|are) now (?:set|on|off|open|closed|at|warmer|cooler)\b",
+    r"\b(?:is|are) (?:now )?turned (?:up|down)\b",
+]
+
+ACTION_TOOLS = ["set_temperature", "adjust_temperature", "set_seat_heating", "set_windows"]
 
 
 # ---------- 1. Tool descriptions (what the LLM reads) ----------
@@ -91,17 +107,41 @@ functions = {
 }
 
 
-# ---------- 3. The agent loop ----------
+# ---------- 3. Guardrail: does the answer claim an action? ----------
+def claims_action(answer):
+    # Split into sentences; questions ("Would you like me to...?") are not claims
+    parts = re.split(r"(?<=[.!?;])\s+", answer.lower().strip())
+    statements = [part for part in parts if not part.endswith("?")]
+    return any(re.search(pattern, sentence) for sentence in statements for pattern in CLAIM_PATTERNS)
+
+
+# ---------- 4. The agent loop ----------
 def ask_assistant(user_text, messages):
     messages.append({"role": "user", "content": user_text})
+    action_done = False  # did an action tool succeed during this request?
 
     for step in range(5):  # max 5 rounds, so it can never loop forever
         response = ollama.chat(model=MODEL, messages=messages, tools=tools, options={"temperature": 0})
         messages.append(response.message)
 
-        # Case 2: no tool needed -> this is the final answer
+        # Case 2: no tool call -> candidate final answer
         if not response.message.tool_calls:
-            return response.message.content
+            answer = response.message.content
+
+            # Guardrail: claimed an action, but nothing happened in the car
+            if claims_action(answer) and not action_done:
+                print("   [guard]  Answer claims an action but no tool succeeded. Asking the model to correct itself.")
+                if step == 4:
+                    return "Sorry, I couldn't complete that. Nothing was changed."
+                messages.append({
+                    "role": "system",
+                    "content": "Check failed: you described an action, but you did not call a tool, so NOTHING changed in the car. "
+                               "Either call the correct tool now for what the driver asked, "
+                               "or tell the driver what is possible and ask them to confirm. Do not claim actions.",
+                })
+                continue
+
+            return answer
 
         # Case 1: run every tool the LLM asked for
         for call in response.message.tool_calls:
@@ -117,13 +157,16 @@ def ask_assistant(user_text, messages):
             else:
                 result = {"ok": False, "error": "Unknown tool"}
 
+            if name in ACTION_TOOLS and isinstance(result, dict) and result.get("ok"):
+                action_done = True
+
             print(f"   [result] {result}")
             messages.append({"role": "tool", "content": str(result), "tool_name": name})
 
     return "Sorry, I couldn't complete that."
 
 
-# ---------- 4. The chat ----------
+# ---------- 5. The chat ----------
 if __name__ == "__main__":
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     print("Car assistant ready. Type 'quit' to exit.")

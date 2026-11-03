@@ -1,8 +1,8 @@
 # LLM Car Assistant
 
-A local, privacy-friendly **in-car assistant** that understands natural language ("I'm freezing", "Let some fresh air in") and safely controls a simulated vehicle through **LLM tool calling**.
+A local, privacy-friendly **in-car voice assistant** that understands natural speech ("I'm freezing", "Let some fresh air in") and safely controls a simulated vehicle through **LLM tool calling**.
 
-> 🚧 **Status: in development.** This is a self-learning project. The text-based agent and its evaluation are working; voice input/output and owner's-manual Q&A are next on the roadmap.
+> 🚧 **Status: in development.** This is a self-learning project. The voice assistant (speech in, speech out), the tool-calling agent, its guardrails and its evaluation are working; owner's-manual Q&A (RAG) is next on the roadmap.
 
 ---
 
@@ -14,12 +14,15 @@ Modern cars move climate, seat and window controls into touchscreens and menus, 
 
 ## What it does (current version)
 
+- **Voice in, voice out:** the driver speaks, Whisper transcribes locally, and the answer is spoken back. Silence is ignored, so a quiet moment never becomes a command.
 - **Understands natural language:** "It's boiling in here" → makes the cabin 3 °C cooler; "Make my seat really warm" → seat heating level 3.
 - **Reads real vehicle data:** battery, range, temperatures, heater, seat heating, windows, speed. No invented values.
 - **Acts through tools, not text:** the LLM only *requests* an action; Python code executes it.
 - **Safety enforced in code:** temperature limited to 16–30 °C, seat heating 0–3, windows cannot open above 100 km/h. Unsafe requests are blocked even if the model asks for them.
 - **Honest responses:** if a request is impossible it says so and offers an alternative instead of pretending.
-- **Multi-turn memory:** remembers the conversation, so a follow-up "yes" confirms the previous suggestion.
+- **Honesty guardrail in code:** if the model claims an action ("I've decreased the temperature…") without a successful tool call, the answer is blocked and the model must correct itself.
+- **Safe confirmations:** when a request is impossible, it offers one exact alternative ("Would you like 30 degrees instead?"); "yes" then performs exactly that action.
+- **Multi-turn memory:** remembers the conversation across turns.
 
 ### Example session (real output)
 
@@ -44,13 +47,19 @@ Car: I can't place orders for you. You can place the order using your phone or a
 ## How it works
 
 ```
-Driver (text)  ──►  LLM agent (Qwen2.5-7B, local)  ──►  tool call request
-                          ▲                                   │
-                          │                                   ▼
-                 tool result (ok / error)  ◄──  Python executes tool + safety checks
-                          │                                   │
-                          ▼                                   ▼
-                 honest answer to driver            simulated vehicle state
+🎤 Microphone ─► loudness check + VAD ─► Whisper (speech → text)
+                                               │
+                                               ▼
+                         LLM agent (Qwen2.5-7B, local) ─► tool call request
+                               ▲                                 │
+                               │                                 ▼
+                  tool result (ok / error) ◄── Python runs tool + safety checks ─► simulated vehicle
+                               │
+                               ▼
+                 honesty guardrail (blocks claimed-but-not-done actions)
+                               │
+                               ▼
+                 🔊 Text-to-speech answer to the driver
 ```
 
 The agent loop runs up to 5 rounds per request: the model either answers directly or asks for one or more tools, the results are fed back, and the model writes the final answer from real data.
@@ -73,7 +82,8 @@ The agent loop runs up to 5 rounds per request: the model either answers directl
 | Runtime | **Ollama**, fully local and offline |
 | Decoding | temperature = 0 (deterministic tool selection) |
 | Language | Python 3.13, `ollama` Python library |
-| Speech-to-text (planned) | OpenAI Whisper |
+| Speech-to-text | **Whisper `base.en`** via faster-whisper, int8 on CPU, with voice activity detection (VAD) and a car-vocabulary hint |
+| Text-to-speech | Windows built-in voices via `pyttsx3` (offline) |
 
 ## Run it
 
@@ -93,9 +103,13 @@ ollama pull qwen2.5:7b
 
 | Command | What it does |
 |---|---|
-| `python agent.py` | Interactive chat with the car assistant (type `quit` to exit) |
+| `python voice.py` | Voice assistant: press Enter, speak for 5 seconds, hear the answer |
+| `python agent.py` | Text chat with the car assistant (type `quit` to exit) |
 | `python evaluate.py` | Runs the evaluation and writes `eval_results.csv` |
 | `python test_vehicle.py` | Unit test of the simulated vehicle and its safety rules |
+| `python test_guard.py` | Tests the honesty guardrail on real answers from earlier failures |
+
+On Windows, if `pip` is blocked by Smart App Control, use `python -m pip install -r requirements.txt`.
 
 ## Evaluation
 
@@ -131,7 +145,22 @@ ollama pull qwen2.5:7b
 
 **Lessons:** a high score can hide wrong behaviour unless the tests check values, not just tool names; good tool design (relative warmer/cooler, like real car buttons) works better than asking the model to guess a number; and every prompt or tool change needs a full re-run to catch regressions.
 
-> **Limitation:** 100% applies to this 22-sentence test set only. A larger and more varied test set is on the roadmap.
+> **Limitation:** 100% applies to this 22-sentence, single-turn test set only. A larger and more varied test set is on the roadmap.
+
+### Voice testing: what the full system revealed
+
+Running the complete voice pipeline exposed problems the single-sentence tests could not:
+
+| Problem found | Example | Fix |
+|---|---|---|
+| Whisper invents words on silence | Silent recording → "You" | Loudness threshold + VAD; silence now does nothing |
+| Speech errors on car words | "I'm freezing" → "Free seeing note" | Car-vocabulary hint (`initial_prompt`); kept short because full sentences leaked into transcripts |
+| Fake actions in longer conversations | "I've decreased the temperature…" with no tool call | Honesty guardrail in code, with its own test (`test_guard.py`, 11/11) |
+| "Yes" to an open question | Model invented 25 °C | Prompt rule: offer one exact alternative, act only on what was proposed |
+| Speech error changed a number | "fifty" → "15" | Caught by the code's safety limits; repeating numbers back is planned |
+| 56 s first answer (cold start) | Ollama had unloaded the model | Warm-up at startup |
+
+**Voice latency (laptop):** about 1.5 s speech-to-text and about 0.4–0.9 s for the LLM and tools, after a 5-second recording window. Voice behaviour was tested by hand; there is no automated voice test set yet.
 
 ## Safety design
 
@@ -144,10 +173,14 @@ The LLM is **not** treated as a safety mechanism. Two layers are used:
 
 ```
 vehicle.py        Simulated vehicle state, actions and safety rules
-agent.py          Tool schemas, agent loop and interactive chat
+agent.py          Tool schemas, agent loop, honesty guardrail and text chat
+voice.py          Microphone → Whisper → agent → text-to-speech
 evaluate.py       Automated evaluation (22 test cases)
 eval_results.csv  Latest evaluation results
 test_vehicle.py   Unit tests for the vehicle and safety rules
+test_guard.py     Tests for the honesty guardrail
+hear_test.py      Microphone and Whisper test
+speak_test.py     Text-to-speech test
 chat_test.py      Early experiments: system prompt and temperature
 tool_test.py      Early experiment: first tool call
 agent_v1.py       Early experiment: single tool-call cycle
@@ -159,7 +192,10 @@ agent_v1.py       Early experiment: single tool-call cycle
 - [x] Simulated vehicle with safety rules
 - [x] Tool-calling agent with multi-turn memory
 - [x] Automated evaluation with value checks
-- [ ] Voice: Whisper speech-to-text and text-to-speech
+- [x] Voice: Whisper speech-to-text, VAD and text-to-speech
+- [x] Honesty guardrail and confirmation handling
+- [ ] Multi-turn and voice test sets (automated)
+- [ ] Repeat numbers back before acting; beep when recording starts
 - [ ] RAG: answer questions from a real owner's manual (e.g. warning lights)
 - [ ] Larger test set and comparison of model sizes (3B vs 7B vs 8B)
 - [ ] LoRA fine-tuning of a small model on car commands
