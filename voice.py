@@ -12,12 +12,7 @@ MIN_LOUDNESS = 0.02    # below this = silence, so we ignore it
 WHISPER_MODEL = "base.en"
 
 # Words a driver is likely to say: helps Whisper choose the right word
-CAR_VOCABULARY = (
-    "In-car voice commands: I'm freezing, it's boiling in here, I'm a bit chilly, "
-    "warmer, cooler, set the temperature to twenty degrees, seat heating, "
-    "make my seat really warm, open the windows, close the windows, "
-    "battery level, range, how far can I drive."
-)
+CAR_VOCABULARY = "freezing, boiling, chilly, warmer, cooler, temperature, degrees, seat heating, windows, battery."
 
 # ---------- Startup: load both models before the driver speaks ----------
 print("Loading Whisper model...")
